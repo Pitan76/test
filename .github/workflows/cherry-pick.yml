@@ -1,0 +1,53 @@
+name: Auto Cherry-Pick
+
+on:
+  push:
+    branches:
+      - main  # トリガーする元ブランチ
+
+jobs:
+  cherry-pick:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 全履歴取る（cherry-pickに必要）
+
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Find target commits
+        id: find
+        run: |
+          COMMITS=$(git log -1 --pretty=format:"%H")
+          if git log -1 --pretty=%B | grep -q '^cp '; then
+            echo "commit_sha=$COMMITS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Cherry-pick if needed
+        if: steps.find.outputs.commit_sha != ''
+        run: |
+          git fetch origin target-branch  # cherry-pick先ブランチ
+          git checkout target-branch
+          if git cherry-pick ${{ steps.find.outputs.commit_sha }}; then
+            git push origin target-branch
+          else
+            git cherry-pick --abort
+            echo "conflict=true" >> $GITHUB_ENV
+          fi
+
+      - name: Create PR on conflict
+        if: env.conflict == 'true'
+        run: |
+          gh auth setup-git
+          gh pr create \
+            --base target-branch \
+            --head main \
+            --title "Manual Cherry-pick needed: ${{ steps.find.outputs.commit_sha }}" \
+            --body "Cherry-pick of ${{ steps.find.outputs.commit_sha }} failed due to conflicts."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
