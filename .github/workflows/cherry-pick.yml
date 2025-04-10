@@ -31,10 +31,10 @@ jobs:
       - name: Cherry-pick if needed
         if: steps.find.outputs.commit_sha != ''
         run: |
-          git fetch origin target-branch  # cherry-pick先ブランチ
-          git checkout target-branch
+          git fetch origin test
+          git checkout test
           if git cherry-pick ${{ steps.find.outputs.commit_sha }}; then
-            git push origin target-branch
+            git push origin test
           else
             git cherry-pick --abort
             echo "conflict=true" >> $GITHUB_ENV
@@ -45,7 +45,7 @@ jobs:
         run: |
           gh auth setup-git
           gh pr create \
-            --base target-branch \
+            --base test \
             --head main \
             --title "Manual Cherry-pick needed: ${{ steps.find.outputs.commit_sha }}" \
             --body "Cherry-pick of ${{ steps.find.outputs.commit_sha }} failed due to conflicts."
